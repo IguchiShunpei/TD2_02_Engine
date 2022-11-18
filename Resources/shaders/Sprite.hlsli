@@ -1,17 +1,15 @@
 //マテリアル
-//ピクセルシェーダ
-//cbuffer ConstBufferDateMaterial : register(b0)
-//{
-//	float4 color;
-//}
-//cbuffer ConstBufferDataTransform : register(b1)
-//{
-//	matrix mat;
-//}
+cbuffer ConstBufferDataMaterial : register(b0)
+{
+	float4 color; //色(RBGA)
+}
+
 //頂点シェーダーの出力構造体
-//(頂点シェーダからピクセルシェーダへのやり取りに使用する)
+//(頂点シェーダーからピクセルシェーダーへのやり取りに使用する)
 struct VSOutput
 {
-	float4 svpos : SV_POSITION;//システム用頂点座標
-	float2 uv : TEXCOORD;//uv値
+	//システムよう頂点座標
+	float4 svpos : SV_POSITION;
+	//uv値
+	float2 uv    : TEXCOORD;
 };
