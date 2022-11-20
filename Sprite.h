@@ -31,17 +31,17 @@ private:
 	// 結果確認
 	HRESULT result;
 
-	//横方向ピクセル数
-	const size_t textureWidth = 256;
+	////横方向ピクセル数
+	//const size_t textureWidth = 256;
 
-	//縦方向ピクセル数
-	const size_t textureHeight = 256;
+	////縦方向ピクセル数
+	//const size_t textureHeight = 256;
 
 	//SRVの最大個数
 	const size_t kMaxSRVCount = 2056;
 
-	//配列の要素数
-	const size_t imageDataCount = textureWidth * textureHeight;
+	////配列の要素数
+	//const size_t imageDataCount = textureWidth * textureHeight;
 
 };
 

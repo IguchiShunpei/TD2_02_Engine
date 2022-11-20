@@ -285,6 +285,7 @@ void DirectXCommon::PreDraw()
 	scissorRect.bottom = WinApp::window_height;
 	//シザー矩形設定コマンドを、コマンドリストに積む
 	commandList_->RSSetScissorRects(1, &scissorRect);
+
 }
 
 void DirectXCommon::PostDraw()
