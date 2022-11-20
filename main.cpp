@@ -3,6 +3,7 @@
 #include"WinApp.h"
 #include"DirectXCommon.h"
 #include "Sprite.h"
+#include "Object3d.h"
 
 #include<windows.h>
 #include<cassert>
@@ -46,103 +47,6 @@ struct ConstBufferDataTransform {
 	XMMATRIX mat; //3D変換行列
 };
 
-//3Dオブジェクト型
-struct Object3d
-{
-	//定数バッファ
-	ComPtr<ID3D12Resource> constBuffTransform;
-
-	//定数バッファマップ(行列用)
-	ConstBufferDataTransform* constMapTransform = nullptr;
-
-	//アフィン変換情報
-	XMFLOAT3 scale = { 1,1,1 };
-	XMFLOAT3 rotation = { 0,0,0 };
-	XMFLOAT3 position = { 0,0,0 };
-
-	//ワールド変換行列
-	XMMATRIX matWorld;
-
-	//親オブジェクトへのポインタ
-	Object3d* parent = nullptr;
-};
-
-//初期化関数
-void InitializeObject3d(Object3d* object, ID3D12Device* device)
-{
-	HRESULT result;
-
-	//ヒープ設定
-	D3D12_HEAP_PROPERTIES HeapProp{};
-	HeapProp.Type = D3D12_HEAP_TYPE_UPLOAD;  //GPUへの転送用
-	//リソース設定
-	D3D12_RESOURCE_DESC resDesc{};
-	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	resDesc.Width = (sizeof(ConstBufferDataTransform) * 0xff) & ~0xff;  //256バイトアラインメント
-	resDesc.Height = 1;
-	resDesc.DepthOrArraySize = 1;
-	resDesc.MipLevels = 1;
-	resDesc.SampleDesc.Count = 1;
-	resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-	//定数バッファの生成
-	result = device->CreateCommittedResource(
-		&HeapProp,//ヒープ設定
-		D3D12_HEAP_FLAG_NONE,
-		&resDesc,//リソース設定
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(&object->constBuffTransform));
-	assert(SUCCEEDED(result));
-
-	//定数バッファのマッピング
-	result = object->constBuffTransform->Map(0, nullptr, (void**)&object->constMapTransform);
-	assert(SUCCEEDED(result));
-}
-
-//更新関数
-void UpdateObject3d(Object3d* object, XMMATRIX& matView, XMMATRIX& matProjection)
-{
-	XMMATRIX matScale, matRot, matTrans;
-
-	matScale = XMMatrixScaling(object->scale.x, object->scale.y, object->scale.z);
-	matRot = XMMatrixIdentity();
-	matRot *= XMMatrixRotationZ(object->rotation.z);
-	matRot *= XMMatrixRotationX(object->rotation.x);
-	matRot *= XMMatrixRotationY(object->rotation.y);
-	matTrans = XMMatrixTranslation(object->position.x, object->position.y, object->position.z);
-
-	object->matWorld = XMMatrixIdentity();
-	object->matWorld *= matScale;
-	object->matWorld *= matRot;
-	object->matWorld *= matTrans;
-
-	if (object->parent != nullptr)
-	{
-		object->matWorld *= object->parent->matWorld;
-	}
-
-	//定数バッファへデータ転送
-	object->constMapTransform->mat = object->matWorld * matView * matProjection;
-}
-
-//描画関数
-void DrawObject3d(Object3d* object, ID3D12GraphicsCommandList* commandList, D3D12_VERTEX_BUFFER_VIEW& vbView,
-	D3D12_INDEX_BUFFER_VIEW& ibView, UINT numIndices)
-{
-	//頂点バッファの設定
-	commandList->IASetVertexBuffers(0, 1, &vbView);
-
-	//インデックスバッファの設定
-	commandList->IASetIndexBuffer(&ibView);
-
-	//定数バッファビュー(CBV)の設定コマンド
-	commandList->SetGraphicsRootConstantBufferView(2, object->constBuffTransform->GetGPUVirtualAddress());
-
-	//描画コマンド
-	commandList->DrawIndexedInstanced(numIndices, 1, 0, 0, 0);
-}
-
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
 
@@ -154,10 +58,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	winApp->Initialize();
 
 	//DirectXのポインタ
-	DirectXCommon* dxCommon_ = nullptr;
+	DirectXCommon* dxCommon = nullptr;
 	//DirectXの初期化
-	dxCommon_ = new DirectXCommon();
-	dxCommon_->Initialize(winApp);
+	dxCommon = new DirectXCommon();
+	dxCommon->Initialize(winApp);
 
 	//入力のポインタ
 	Input* input = nullptr;
@@ -168,9 +72,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	//スプライトのポインタ
 	Sprite* sprite = new Sprite;
 	//スプライトの初期化
-	sprite->Initialize(dxCommon_, WinApp::window_width, WinApp::window_height);
-	sprite->LoadTexture(1, L"Resources/texture.jpg",dxCommon_);
+	sprite->Initialize(dxCommon, WinApp::window_width, WinApp::window_height);
+	sprite->LoadTexture(1, L"Resources/texture.jpg",dxCommon);
 
+	//3Dオブジェクト静的初期化
+	Object3d::StaticInitialize(dxCommon->GetDevice(), WinApp::window_width, WinApp::window_height);
+	//3Dオブジェクト生成
+	Object3d* object3d = Object3d::Create();
 #pragma endregion 基盤システムの初期化
 
 		//ゲームループ
@@ -189,19 +97,30 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		input->Update();
 		sprite->Update();
 
+		//3dオブジェクト更新
+		object3d->Update();
+
 #pragma endregion 基盤システムの更新
 		
 		//描画前処理
-		dxCommon_->PreDraw();
+		dxCommon->PreDraw();
 
 #pragma region 最初のシーンの描画
+		//3Dオブジェクト描画前処理
+		Object3d::PreDraw(dxCommon->GetCommandList());
+
+		object3d->Draw();
+
+		//3Dオブジェクト描画前処理
+		Object3d::PostDraw();
 
 		//ここにポリゴンなどの描画処理を書く
-		sprite->Draw(dxCommon_);
+		sprite->Draw(dxCommon);
+
 #pragma endregion 最初のシーンの描画
 
 		// 描画後処理
-		dxCommon_->PostDraw();
+		dxCommon->PostDraw();
 	}
 
 #pragma region 最初のシーンの終了
@@ -212,17 +131,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 #pragma region 基盤システムの終了
 
+	//3Dオブジェクト解放
+	delete object3d;
+
+	//WindowsAPIの終了処理
+	winApp->Finalize();
+
 	//DirectX解放
-	delete dxCommon_;
+	delete dxCommon;
 
 	//入力解放
 	delete input;
 
 	//スプライトの解放
 	delete sprite;
-
-	//WindowsAPIの終了処理
-	winApp->Finalize();
 
 	//WindowsAPI解放
 	delete winApp;
