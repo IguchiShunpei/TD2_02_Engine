@@ -465,7 +465,8 @@ void Sprite::Initialize(DirectXCommon*dxCommon_ ,int window_width, int window_he
 
 void Sprite::Update()
 {
-
+	//XMMATRIX matTrans; //•½sˆÚ“®s—ñ
+	//matTrans = XMMatrixTranslation(position_.x, position_.y, 0.0f);//•½sˆÚ“®
 }
 
 void Sprite::Draw(DirectXCommon* dxCommon_)
