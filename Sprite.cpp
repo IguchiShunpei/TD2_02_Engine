@@ -22,6 +22,9 @@ Vertex vertices[] = {
 	{{100.0f,0.0f,0.0f},{1.0f,0.0f,}},//右上  インデックス3
 };
 
+//デフォルトテクスチャ格納ディレクトリ
+std::string Sprite::kDefaultTextureDirectoryPath = "Resources/";
+
 void Sprite::Initialize(DirectXCommon*dxCommon_ ,int window_width, int window_height)
 {
 	//頂点データの全体のサイズ = 頂点データ一つ分のサイズ * 頂点データの要素数
@@ -74,6 +77,9 @@ void Sprite::Initialize(DirectXCommon*dxCommon_ ,int window_width, int window_he
 	//頂点一つ分のデータサイズ
 	vbView.StrideInBytes = sizeof(vertices[0]);
 
+	//CBV,SRV,UAVの1個分のサイズを取得
+	UINT descriptorSize = dxCommon_->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
 	ComPtr < ID3DBlob> vsBlob;    //頂点シェーダオブジェクト
 	ComPtr < ID3DBlob> psBlob;    //ピクセルシェーダオブジェクト
 	ComPtr < ID3DBlob> errorBlob; //エラーオブジェクト
@@ -90,75 +96,6 @@ void Sprite::Initialize(DirectXCommon*dxCommon_ ,int window_width, int window_he
 	//	imageData[i].w = 1.0f; // A
 	//}
 
-	//画像読み込み
-	TexMetadata metadata{};
-	ScratchImage scratchImg{};
-	//WICテクスチャのロード
-	result = LoadFromWICFile
-	(
-		L"Resources/texture.jpg",
-		WIC_FLAGS_NONE,
-		&metadata, scratchImg
-	);
-
-	ScratchImage mipChain{};
-
-	// ミップマップ生成
-	result = GenerateMipMaps(
-		scratchImg.GetImages(), scratchImg.GetImageCount(), scratchImg.GetMetadata(),
-		TEX_FILTER_DEFAULT, 0, mipChain);
-	if (SUCCEEDED(result)) {
-		scratchImg = std::move(mipChain);
-		metadata = scratchImg.GetMetadata();
-	}
-
-	//読み込んだディフューズテクスチャをSRGBとして扱う
-	metadata.format = MakeSRGB(metadata.format);
-
-	//ヒープ設定
-	D3D12_HEAP_PROPERTIES textureHeapProp{};
-	textureHeapProp.Type = D3D12_HEAP_TYPE_CUSTOM;
-	textureHeapProp.CPUPageProperty =
-		D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
-	textureHeapProp.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
-	//リソース設定
-	D3D12_RESOURCE_DESC textureResourceDesc{};
-	textureResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-	textureResourceDesc.Format = metadata.format;
-	textureResourceDesc.Width = metadata.width;  //幅
-	textureResourceDesc.Height = (UINT)metadata.height;//高さ
-	textureResourceDesc.DepthOrArraySize = (UINT16)metadata.arraySize;
-	textureResourceDesc.MipLevels = (UINT16)metadata.mipLevels;
-	textureResourceDesc.SampleDesc.Count = 1;
-
-	//テクスチャバッファの生成
-	result = dxCommon_->GetDevice()->CreateCommittedResource
-	(
-		&textureHeapProp,
-		D3D12_HEAP_FLAG_NONE,
-		&textureResourceDesc,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nullptr,
-		IID_PPV_ARGS(&texBuff_)
-	);
-
-	//全ミップマップについて
-	for (size_t i = 0; i < metadata.mipLevels; i++)
-	{
-		//ミップマップレベルを指定してイメージを取得
-		const Image* img = scratchImg.GetImage(i, 0, 0);
-		//テクスチャバッファにデータ転送
-		result = texBuff_->WriteToSubresource
-		(
-			(UINT)i,
-			nullptr,			   //全領域へコピー
-			img->pixels,		   //元データアドレス
-			(UINT)img->rowPitch,   //1ラインサイズ
-			(UINT)img->slicePitch  //1枚サイズ
-		);
-		assert(SUCCEEDED(result));
-	}
-
 	//デスクリプタヒープの設定
 	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
 	srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -169,32 +106,14 @@ void Sprite::Initialize(DirectXCommon*dxCommon_ ,int window_width, int window_he
 	result = dxCommon_->GetDevice()->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&srvHeap_));
 	assert(SUCCEEDED(result));
 
-	//SRVヒープの先頭ハンドルを取得
-	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvHeap_->GetCPUDescriptorHandleForHeapStart();
+	////ハンドルを1つ進める（SRVの位置）
+	//srvHandle.ptr += descriptorSize * 1;
 
-	//シェーダーリソースビュー設定
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};//設定構造体
-	srvDesc.Format = resDesc.Format;
-	srvDesc.Shader4ComponentMapping =
-		D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;//2Dテクスチャ
-	srvDesc.Texture2D.MipLevels = resDesc.MipLevels;
-
-	//ハンドルの指す位置にシェーダーリソースビュー作成
-	dxCommon_->GetDevice()->CreateShaderResourceView(texBuff_.Get(), 
-		&srvDesc, srvHandle);
-
-	//CBV,SRV,UAVの1個分のサイズを取得
-	UINT descriptorSize = dxCommon_->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-	//ハンドルを1つ進める（SRVの位置）
-	srvHandle.ptr += descriptorSize * 1;
-
-	//CBV(コンスタントバッファビュー)の設定
-	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc{};
-	//cbvDescの値設定（省略）
-	//定数バッファビュー生成
-	dxCommon_->GetDevice()->CreateConstantBufferView(&cbvDesc, srvHandle);
+	////CBV(コンスタントバッファビュー)の設定
+	//D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc{};
+	////cbvDescの値設定（省略）
+	////定数バッファビュー生成
+	//dxCommon_->GetDevice()->CreateConstantBufferView(&cbvDesc, srvHandle);
 
 	//定数バッファ用データ構造体(マテリアル)
 	struct ConstBufferDataMaterial {
@@ -469,18 +388,104 @@ void Sprite::Update()
 	//matTrans = XMMatrixTranslation(position_.x, position_.y, 0.0f);//平行移動
 }
 
-void Sprite::Draw(DirectXCommon* dxCommon_)
+void Sprite::LoadTexture(uint32_t index, const wchar_t* fileName, DirectXCommon* dxCommon_)
+{
+
+	//画像読み込み
+	TexMetadata metadata{};
+	ScratchImage scratchImg{};
+	//WICテクスチャのロード
+	result = LoadFromWICFile
+	(
+		fileName,
+		WIC_FLAGS_NONE,
+		&metadata, scratchImg
+	);
+
+	ScratchImage mipChain{};
+
+	// ミップマップ生成
+	result = GenerateMipMaps(
+		scratchImg.GetImages(), scratchImg.GetImageCount(), scratchImg.GetMetadata(),
+		TEX_FILTER_DEFAULT, 0, mipChain);
+	if (SUCCEEDED(result)) {
+		scratchImg = std::move(mipChain);
+		metadata = scratchImg.GetMetadata();
+	}
+
+	//読み込んだディフューズテクスチャをSRGBとして扱う
+	metadata.format = MakeSRGB(metadata.format);
+
+	//ヒープ設定
+	D3D12_HEAP_PROPERTIES textureHeapProp{};
+	textureHeapProp.Type = D3D12_HEAP_TYPE_CUSTOM;
+	textureHeapProp.CPUPageProperty =
+		D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
+	textureHeapProp.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
+	//リソース設定
+	D3D12_RESOURCE_DESC textureResourceDesc{};
+	textureResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	textureResourceDesc.Format = metadata.format;
+	textureResourceDesc.Width = metadata.width;  //幅
+	textureResourceDesc.Height = (UINT)metadata.height;//高さ
+	textureResourceDesc.DepthOrArraySize = (UINT16)metadata.arraySize;
+	textureResourceDesc.MipLevels = (UINT16)metadata.mipLevels;
+	textureResourceDesc.SampleDesc.Count = 1;
+
+	//テクスチャバッファの生成
+	result = dxCommon_->GetDevice()->CreateCommittedResource
+	(
+		&textureHeapProp,
+		D3D12_HEAP_FLAG_NONE,
+		&textureResourceDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&textureBuffers_[index])
+	);
+
+	//テクスチャバッファへの画像データ転送
+	for (size_t i = 0; i < metadata.mipLevels; i++)
+	{
+		//ミップマップレベルを指定してイメージを取得
+		const Image* img = scratchImg.GetImage(i, 0, 0);
+		//テクスチャバッファにデータ転送
+		result = textureBuffers_[index]->WriteToSubresource
+		(
+			(UINT)i,
+			nullptr,			   //全領域へコピー
+			img->pixels,		   //元データアドレス
+			(UINT)img->rowPitch,   //1ラインサイズ
+			(UINT)img->slicePitch  //1枚サイズ
+		);
+		assert(SUCCEEDED(result));
+	}
+
+	//シェーダーリソースビュー設定
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};//設定構造体
+	D3D12_RESOURCE_DESC resDesc = textureBuffers_[index]->GetDesc();
+
+	srvDesc.Format = resDesc.Format;
+	srvDesc.Shader4ComponentMapping =
+		D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;//2Dテクスチャ
+	srvDesc.Texture2D.MipLevels = resDesc.MipLevels;
+
+	//SRVヒープの先頭ハンドルを取得
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvHeap_->GetCPUDescriptorHandleForHeapStart();
+
+	//ハンドルの指す位置にシェーダーリソースビュー作成
+	dxCommon_->GetDevice()->CreateShaderResourceView(textureBuffers_[index].Get(),
+		&srvDesc, srvHandle);
+}
+
+void Sprite::SetTextureCommands(uint32_t index, DirectXCommon* dxCommon_)
 {
 	//パイプラインステートとルートシグネチャの設定コマンド
 	dxCommon_->GetCommandList()->SetPipelineState(pipelineState_.Get());
 	dxCommon_->GetCommandList()->SetGraphicsRootSignature(rootSignature_.Get());
-	
 	//プリミティブ形状の設定コマンド
 	dxCommon_->GetCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-	//頂点バッファビューの設定コマンド
-	dxCommon_->GetCommandList()->IASetVertexBuffers(0, 1, &vbView);
-	//定数バッファビュー(CBV)の設定コマンド
-	dxCommon_->GetCommandList()->SetGraphicsRootConstantBufferView(0, constBuffMaterial_->GetGPUVirtualAddress());
+	//デスクリプタヒープのセット
 	ID3D12DescriptorHeap* srvHeapTemp;
 	srvHeapTemp = srvHeap_.Get();
 	//SRVヒープの設定コマンド
@@ -490,6 +495,16 @@ void Sprite::Draw(DirectXCommon* dxCommon_)
 		srvHeap_->GetGPUDescriptorHandleForHeapStart();
 	//SRVヒープの先頭にあるSRVをルートパラメータ1番に設定
 	dxCommon_->GetCommandList()->SetGraphicsRootDescriptorTable(1, srvGpuHandle);
+}
+
+void Sprite::Draw(DirectXCommon* dxCommon_)
+{
+	SetTextureCommands(textureIndex_, dxCommon_);
+
+	//頂点バッファビューの設定コマンド
+	dxCommon_->GetCommandList()->IASetVertexBuffers(0, 1, &vbView);
+	//定数バッファビュー(CBV)の設定コマンド
+	dxCommon_->GetCommandList()->SetGraphicsRootConstantBufferView(0, constBuffMaterial_->GetGPUVirtualAddress());
 	//定数バッファビュー(CBV)の設定コマンド
 	dxCommon_->GetCommandList()->SetGraphicsRootConstantBufferView(2, constBuffTransform_->GetGPUVirtualAddress());
 	//描画コマンド

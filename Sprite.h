@@ -2,6 +2,7 @@
 #include "DirectXCommon.h"
 #include <wrl.h>
 #include<DirectXMath.h>
+#include<array>
 
 class Sprite
 {
@@ -11,6 +12,10 @@ public:
 	void Update();
 
 	void Draw(DirectXCommon* dxCommon_);
+
+	void LoadTexture(uint32_t index, const wchar_t* fileName,DirectXCommon* dxCommon_);
+
+	void SetTextureCommands(uint32_t index, DirectXCommon* dxCommon_);
 
 	//座標setter
 	void SetPosition(const DirectX::XMFLOAT2& position) { position_ = position; }
@@ -44,13 +49,21 @@ public:
 	bool SetInvisible(bool isInvisible) { isInvisible_ = isInvisible; }
 	//非表示フラグgetter
 	bool GetInvisible() const { return isInvisible_; }
+	//テクスチャ番号setter
+	int SetTextureIndex(int textureIndex) { textureIndex_ = textureIndex; }
+	//テクスチャ番号getter
+	int GetTextureIndex() const { return textureIndex_; }
 private:
+	//SRVの最大個数
+	static const size_t kMaxSRVCount = 2056;
+	//デフォルトテクスチャ格納ディレクトリ
+	static std::string kDefaultTextureDirectoryPath;
 	//頂点バッファ
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertBuff_;
 	//定数バッファ
 	Microsoft::WRL::ComPtr<ID3D12Resource> constBuffMaterial_;
 	//テクスチャバッファ
-	Microsoft::WRL::ComPtr<ID3D12Resource> texBuff_;
+	std::array<Microsoft::WRL::ComPtr<ID3D12Resource>,kMaxSRVCount> textureBuffers_;
 	//頂点バッファビュー
 	D3D12_VERTEX_BUFFER_VIEW vbView{};
 	//ルートシグネチャ
@@ -70,9 +83,6 @@ private:
 
 	////縦方向ピクセル数
 	//const size_t textureHeight = 256;
-
-	//SRVの最大個数
-	const size_t kMaxSRVCount = 2056;
 
 	//座標
 	DirectX::XMFLOAT2 position_ = { 0.0f,0.0f };
@@ -98,6 +108,8 @@ private:
 	bool isFlipY_ = false;
 	//非表示フラグ
 	bool isInvisible_ = false;
+	//テクスチャ番号
+	uint32_t textureIndex_ = 0;
 	////配列の要素数
 	//const size_t imageDataCount = textureWidth * textureHeight;
 

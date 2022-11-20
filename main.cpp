@@ -169,6 +169,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	Sprite* sprite = new Sprite;
 	//スプライトの初期化
 	sprite->Initialize(dxCommon_, WinApp::window_width, WinApp::window_height);
+	sprite->LoadTexture(1, L"Resources/texture.jpg",dxCommon_);
 
 #pragma endregion 基盤システムの初期化
 
