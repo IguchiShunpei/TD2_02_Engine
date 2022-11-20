@@ -12,6 +12,38 @@ public:
 
 	void Draw(DirectXCommon* dxCommon_);
 
+	//座標setter
+	void SetPosition(const DirectX::XMFLOAT2& position) { position_ = position; }
+	//座標getter
+	const DirectX::XMFLOAT2& GetPosition() const { return position_; }
+	//回転setter
+	void SetRotation(float rotation) { rotation_ = rotation; }
+	//回転getter
+	float GetRotation() const { return rotation_; }
+	//色setter
+	void SetColor(const DirectX::XMFLOAT4& color) { color_ = color; }
+	//色getter
+	const DirectX::XMFLOAT4& GetColor() const { return color_; }
+	//表示サイズsetter
+	void SetSize(const DirectX::XMFLOAT2& size) { size_ = size; }
+	//表示サイズgetter
+	const DirectX::XMFLOAT2& GetSize() const { return size_; }
+	//アンカーポイントsetter
+	void SetAnchorPoint(const DirectX::XMFLOAT2& anchorPoint) { anchorPoint_ = anchorPoint; }
+	//アンカーポイントgetter
+	const DirectX::XMFLOAT2& GetAnchorPoint() const { return anchorPoint_; }
+	//左右フリップsetter
+	bool SetFripX(bool isFlipX) { isFlipX_ = isFlipX; }
+	//左右フリップgetter
+	bool GetFlipX() const { return isFlipX_; }
+	//上下フリップsetter
+	bool SetFripY(bool isFlipY) { isFlipY_ = isFlipY; }
+	//上下フリップgetter
+	bool GetFlipY() const { return isFlipY_; }
+	//非表示フラグsetter
+	bool SetInvisible(bool isInvisible) { isInvisible_ = isInvisible; }
+	//非表示フラグgetter
+	bool GetInvisible() const { return isInvisible_; }
 private:
 	//頂点バッファ
 	Microsoft::WRL::ComPtr<ID3D12Resource> vertBuff_;
@@ -42,9 +74,30 @@ private:
 	//SRVの最大個数
 	const size_t kMaxSRVCount = 2056;
 
-	// 回転角
-	float rotation;
-	
+	//座標
+	DirectX::XMFLOAT2 position_ = { 0.0f,0.0f };
+	// Z軸回りの回転角
+	float rotation_ = 0.0f;
+	//色(RGBA)
+	DirectX::XMFLOAT4 color_ = { 1,1,1,1 };
+	//表示サイズ
+	DirectX::XMFLOAT2 size_ = { 100.0f,100.0f };
+	//頂点番号
+	enum VertexNumber
+	{
+		LB,  //左下
+		LT,  //左上
+		RB,  //右下
+		RT,  //右上
+	};
+	//アンカーポイント
+	DirectX::XMFLOAT2 anchorPoint_ = { 0.0f,0.0f };
+	//左右フリップ
+	bool isFlipX_ = false;
+	//上下フリップ
+	bool isFlipY_ = false;
+	//非表示フラグ
+	bool isInvisible_ = false;
 	////配列の要素数
 	//const size_t imageDataCount = textureWidth * textureHeight;
 
