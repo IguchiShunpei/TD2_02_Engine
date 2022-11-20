@@ -168,7 +168,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	//スプライトのポインタ
 	Sprite* sprite = new Sprite;
 	//スプライトの初期化
-	sprite->Initialize(dxCommon_);
+	sprite->Initialize(dxCommon_, WinApp::window_width, WinApp::window_height);
 
 #pragma endregion 基盤システムの初期化
 

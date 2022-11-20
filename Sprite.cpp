@@ -16,13 +16,13 @@ struct Vertex
 
 //頂点データ
 Vertex vertices[] = {
-	{{-0.4f,-0.7f,0.0f},{0.0f,1.0f,}},//左下  インデックス0
-	{{-0.4f,+0.7f,0.0f},{0.0f,0.0f,}},//左上  インデックス1
-	{{+0.4f,-0.7f,0.0f},{1.0f,1.0f,}},//右下  インデックス2
-	{{+0.4f,+0.7f,0.0f},{1.0f,0.0f,}},//右上  インデックス3
+	{{  0.0f,100.0f,0.0f},{0.0f,1.0f,}},//左下  インデックス0
+	{{  0.0f,  0.0f,0.0f},{0.0f,0.0f,}},//左上  インデックス1
+	{{100.0f,100.0f,0.0f},{1.0f,1.0f,}},//右下  インデックス2
+	{{100.0f,0.0f,0.0f},{1.0f,0.0f,}},//右上  インデックス3
 };
 
-void Sprite::Initialize(DirectXCommon*dxCommon_)
+void Sprite::Initialize(DirectXCommon*dxCommon_ ,int window_width, int window_height)
 {
 	//頂点データの全体のサイズ = 頂点データ一つ分のサイズ * 頂点データの要素数
 	UINT sizeVB = static_cast<UINT>(sizeof(vertices[0]) * _countof(vertices));
@@ -201,6 +201,13 @@ void Sprite::Initialize(DirectXCommon*dxCommon_)
 		XMFLOAT4 color;//色(RGBA)
 	};
 
+	//定数バッファ用データ構造体(3D変換行列)
+	struct ConstBufferDataTransform {
+		XMMATRIX mat; //3D変換行列
+	};
+
+	//マテリアル//
+
 	//ヒープ設定
 	D3D12_HEAP_PROPERTIES cbHeapProp{};
 	cbHeapProp.Type = D3D12_HEAP_TYPE_UPLOAD;  //GPUへの転送用
@@ -232,6 +239,50 @@ void Sprite::Initialize(DirectXCommon*dxCommon_)
 	//値を書き込むと自動的に転送される
 	constMapMaterial->color = XMFLOAT4(1, 0, 0, 0.5f);  //RGBAで半透明の赤
 
+	////3D変換行列////
+	ConstBufferDataTransform* constMapTransform = nullptr; //定数バッファのマッピング用ポインタ
+
+	{
+		//ヒープ設定
+		D3D12_HEAP_PROPERTIES cbHeapProp{};
+		cbHeapProp.Type = D3D12_HEAP_TYPE_UPLOAD;		//GPUへの転送用
+		//リソース設定
+		D3D12_RESOURCE_DESC cbResourceDesc{};
+		cbResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		cbResourceDesc.Width = (sizeof(ConstBufferDataTransform) + 0xff) & ~0xff; //256バイトアラインメント
+		cbResourceDesc.Height = 1;
+		cbResourceDesc.DepthOrArraySize = 1;
+		cbResourceDesc.MipLevels = 1;
+		cbResourceDesc.SampleDesc.Count = 1;
+		cbResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+		//定数バッファの生成
+		result = dxCommon_->GetDevice()->CreateCommittedResource(
+			&cbHeapProp,
+			D3D12_HEAP_FLAG_NONE,
+			&cbResourceDesc,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&constBuffTransform_));
+		assert(SUCCEEDED(result));
+
+		//定数バッファのマッピング
+		result = constBuffTransform_->Map(0, nullptr, (void**)&constMapTransform);  //マッピング
+		assert(SUCCEEDED(result));
+
+		//単位行列を代入
+		constMapTransform->mat = XMMatrixIdentity();
+
+		//中心座標を変換
+		constMapTransform->mat.r[0].m128_f32[0] = 2.0f / window_width;
+		constMapTransform->mat.r[1].m128_f32[1] = -2.0f / window_height;
+
+		//中心座標を左上にずらす
+		constMapTransform->mat.r[3].m128_f32[0] = -1.0f;
+		constMapTransform->mat.r[3].m128_f32[1] = 1.0f;
+
+	}
+
 		//デスクリプタレンジの設定
 	D3D12_DESCRIPTOR_RANGE descriptorRange{};
 	descriptorRange.NumDescriptors = 1;               //一度の描画に使うテクスチャが1枚なので1
@@ -240,7 +291,7 @@ void Sprite::Initialize(DirectXCommon*dxCommon_)
 	descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
 	//ルートパラメータの設定
-	D3D12_ROOT_PARAMETER rootParams[2] = {};
+	D3D12_ROOT_PARAMETER rootParams[3] = {};
 	//定数バッファ0番
 	rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
 	rootParams[0].Descriptor.ShaderRegister = 0;
@@ -251,6 +302,11 @@ void Sprite::Initialize(DirectXCommon*dxCommon_)
 	rootParams[1].DescriptorTable.pDescriptorRanges = &descriptorRange;        //デスクリプタレンジ
 	rootParams[1].DescriptorTable.NumDescriptorRanges = 1;                     //デフォルト値
 	rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;              //全てのシェーダから見える
+	//定数バッファ1番
+	rootParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;   //種類
+	rootParams[2].Descriptor.ShaderRegister = 1;                   //デスクリプタレンジ
+	rootParams[2].Descriptor.RegisterSpace = 0;                    //デフォルト値
+	rootParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;  //全てのシェーダから見える
 
 	//テクスチャサンプラーの設定
 	D3D12_STATIC_SAMPLER_DESC samplerDesc{};
@@ -433,6 +489,8 @@ void Sprite::Draw(DirectXCommon* dxCommon_)
 		srvHeap_->GetGPUDescriptorHandleForHeapStart();
 	//SRVヒープの先頭にあるSRVをルートパラメータ1番に設定
 	dxCommon_->GetCommandList()->SetGraphicsRootDescriptorTable(1, srvGpuHandle);
+	//定数バッファビュー(CBV)の設定コマンド
+	dxCommon_->GetCommandList()->SetGraphicsRootConstantBufferView(2, constBuffTransform_->GetGPUVirtualAddress());
 	//描画コマンド
 	dxCommon_->GetCommandList()->DrawInstanced(4, 1, 0, 0);  //全ての頂点を使って描画
 }
