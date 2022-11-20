@@ -6,7 +6,7 @@
 class Sprite
 {
 public:
-	void Initialize(DirectXCommon*dxCommon_);
+	void Initialize(DirectXCommon*dxCommon_, int window_width, int window_height);
 
 	void Update();
 
@@ -27,6 +27,8 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
 	//デスクリプタヒープ
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap_;
+	//定数バッファのGPUリソースのポインタ
+	Microsoft::WRL::ComPtr<ID3D12Resource> constBuffTransform_;
 
 	// 結果確認
 	HRESULT result;
@@ -40,6 +42,9 @@ private:
 	//SRVの最大個数
 	const size_t kMaxSRVCount = 2056;
 
+	// 回転角
+	float rotation;
+	
 	////配列の要素数
 	//const size_t imageDataCount = textureWidth * textureHeight;
 
