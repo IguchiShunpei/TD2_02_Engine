@@ -4,6 +4,7 @@
 #include"DirectXCommon.h"
 #include "Sprite.h"
 #include "Object3d.h"
+#include"Model.h"
 
 #include<windows.h>
 #include<cassert>
@@ -77,8 +78,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	//3Dオブジェクト静的初期化
 	Object3d::StaticInitialize(dxCommon->GetDevice(), WinApp::window_width, WinApp::window_height);
+	//OBJからモデルデータを読み込む
+	Model* model_1 = Model:: LoadFromOBJ("triangle_mat");
+	Model* model_2 = Model::LoadFromOBJ("triangle_mat");
 	//3Dオブジェクト生成
-	Object3d* object3d = Object3d::Create();
+	Object3d* object3d_1 = Object3d::Create();
+	Object3d* object3d_2 = Object3d::Create();
+	Object3d* object3d_3 = Object3d::Create();
+	//オブジェクトにモデルを紐付ける
+	object3d_1->SetModel(model_1);
+	object3d_2->SetModel(model_2);
+	object3d_3->SetModel(model_2);
+	//オブジェクトの位置を指定
+	object3d_2->SetPosition({ -5,0,-5 });
+	object3d_3->SetPosition({ +5,0,+5 });
 #pragma endregion 基盤システムの初期化
 
 		//ゲームループ
@@ -98,7 +111,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		sprite->Update();
 
 		//3dオブジェクト更新
-		object3d->Update();
+		object3d_1->Update();
+		object3d_2->Update();
+		object3d_3->Update();
 
 #pragma endregion 基盤システムの更新
 		
@@ -109,7 +124,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		//3Dオブジェクト描画前処理
 		Object3d::PreDraw(dxCommon->GetCommandList());
 
-		object3d->Draw();
+		object3d_1->Draw();
+		object3d_2->Draw();
+		object3d_3->Draw();
 
 		//3Dオブジェクト描画前処理
 		Object3d::PostDraw();
@@ -131,8 +148,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 #pragma region 基盤システムの終了
 
+	//3Dモデル解放
+	delete model_1;
+	delete model_2;
 	//3Dオブジェクト解放
-	delete object3d;
+	delete object3d_1;
+	delete object3d_2;
+	delete object3d_3;
 
 	//WindowsAPIの終了処理
 	winApp->Finalize();
