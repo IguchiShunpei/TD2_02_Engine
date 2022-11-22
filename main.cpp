@@ -74,7 +74,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	Sprite* sprite = new Sprite;
 	//スプライトの初期化
 	sprite->Initialize(dxCommon, WinApp::window_width, WinApp::window_height);
-	sprite->LoadTexture(1, L"Resources/texture.jpg",dxCommon);
+	sprite->LoadTexture(1, L"Resources/skydome.jpg",dxCommon);
 
 	//3Dオブジェクト静的初期化
 	Object3d::StaticInitialize(dxCommon->GetDevice(), WinApp::window_width, WinApp::window_height);

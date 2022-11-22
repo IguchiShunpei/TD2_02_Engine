@@ -16,16 +16,28 @@ struct Vertex
 
 //頂点データ
 Vertex vertices[] = {
-	{{  0.0f,100.0f,0.0f},{0.0f,1.0f,}},//左下  インデックス0
-	{{  0.0f,  0.0f,0.0f},{0.0f,0.0f,}},//左上  インデックス1
-	{{100.0f,100.0f,0.0f},{1.0f,1.0f,}},//右下  インデックス2
-	{{100.0f,0.0f,0.0f},{1.0f,0.0f,}},//右上  インデックス3
+	{{ -1.0f,-1.0f,0.0f},{0.0f,1.0f,}},//左下  インデックス0
+	{{ -1.0f, 1.0f,0.0f},{0.0f,0.0f,}},//左上  インデックス1
+	{{  1.0f,-1.0f,0.0f},{1.0f,1.0f,}},//右下  インデックス2
+	{{  1.0f, 1.0f,0.0f},{1.0f,0.0f,}},//右上  インデックス3
+};
+
+//定数バッファ用データ構造体(マテリアル)
+struct ConstBufferDataMaterial {
+	XMFLOAT4 color;//色(RGBA)
+};
+
+//定数バッファ用データ構造体(3D変換行列)
+struct ConstBufferDataTransform {
+	XMMATRIX mat; //3D変換行列
 };
 
 //デフォルトテクスチャ格納ディレクトリ
 std::string Sprite::kDefaultTextureDirectoryPath = "Resources/";
+ComPtr<ID3D12Resource> constBuffTransform_;       //定数バッファのGPUリソースのポインタ
+ConstBufferDataTransform* constMapTransform = nullptr; //定数バッファのマッピング用ポインタ
 
-void Sprite::Initialize(DirectXCommon*dxCommon_ ,int window_width, int window_height)
+void Sprite::Initialize(DirectXCommon* dxCommon_, int window_width, int window_height)
 {
 	//頂点データの全体のサイズ = 頂点データ一つ分のサイズ * 頂点データの要素数
 	UINT sizeVB = static_cast<UINT>(sizeof(vertices[0]) * _countof(vertices));
@@ -115,16 +127,6 @@ void Sprite::Initialize(DirectXCommon*dxCommon_ ,int window_width, int window_he
 	////定数バッファビュー生成
 	//dxCommon_->GetDevice()->CreateConstantBufferView(&cbvDesc, srvHandle);
 
-	//定数バッファ用データ構造体(マテリアル)
-	struct ConstBufferDataMaterial {
-		XMFLOAT4 color;//色(RGBA)
-	};
-
-	//定数バッファ用データ構造体(3D変換行列)
-	struct ConstBufferDataTransform {
-		XMMATRIX mat; //3D変換行列
-	};
-
 	//マテリアル//
 
 	//ヒープ設定
@@ -159,7 +161,6 @@ void Sprite::Initialize(DirectXCommon*dxCommon_ ,int window_width, int window_he
 	constMapMaterial->color = XMFLOAT4(1, 0, 0, 0.5f);  //RGBAで半透明の赤
 
 	////3D変換行列////
-	ConstBufferDataTransform* constMapTransform = nullptr; //定数バッファのマッピング用ポインタ
 
 	{
 		//ヒープ設定
@@ -202,7 +203,10 @@ void Sprite::Initialize(DirectXCommon*dxCommon_ ,int window_width, int window_he
 
 	}
 
-		//デスクリプタレンジの設定
+	//行列を合成
+	constMapTransform->mat = matWorld;
+
+	//デスクリプタレンジの設定
 	D3D12_DESCRIPTOR_RANGE descriptorRange{};
 	descriptorRange.NumDescriptors = 1;               //一度の描画に使うテクスチャが1枚なので1
 	descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -358,8 +362,8 @@ void Sprite::Initialize(DirectXCommon*dxCommon_ ,int window_width, int window_he
 
 	//ルートシグネチャの設定
 	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{ };
-	rootSignatureDesc.Flags = 
-	D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+	rootSignatureDesc.Flags =
+		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 	rootSignatureDesc.pParameters = rootParams;//ルートパラメータの先頭アドレス
 	rootSignatureDesc.NumParameters = _countof(rootParams); //ルートパラメータ数
 	rootSignatureDesc.pStaticSamplers = &samplerDesc;
@@ -384,8 +388,15 @@ void Sprite::Initialize(DirectXCommon*dxCommon_ ,int window_width, int window_he
 
 void Sprite::Update()
 {
-	//XMMATRIX matTrans; //平行移動行列
-	//matTrans = XMMatrixTranslation(position_.x, position_.y, 0.0f);//平行移動
+	matWorld = XMMatrixIdentity();//変形をリセット
+
+	XMMATRIX matTrans; //平行移動行列
+	matTrans = XMMatrixTranslation(position_.x, position_.y, 0);//平行移動
+
+	matWorld *= matTrans;
+
+	//行列を合成して定数バッファに転送
+	constMapTransform->mat = matWorld;
 }
 
 void Sprite::LoadTexture(uint32_t index, const wchar_t* fileName, DirectXCommon* dxCommon_)

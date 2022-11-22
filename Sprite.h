@@ -53,6 +53,7 @@ public:
 	int SetTextureIndex(int textureIndex) { textureIndex_ = textureIndex; }
 	//テクスチャ番号getter
 	int GetTextureIndex() const { return textureIndex_; }
+	
 private:
 	//SRVの最大個数
 	static const size_t kMaxSRVCount = 2056;
@@ -72,8 +73,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
 	//デスクリプタヒープ
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srvHeap_;
-	//定数バッファのGPUリソースのポインタ
-	Microsoft::WRL::ComPtr<ID3D12Resource> constBuffTransform_;
+	
 
 	// 結果確認
 	HRESULT result;
@@ -86,6 +86,8 @@ private:
 
 	//座標
 	DirectX::XMFLOAT2 position_ = { 0.0f,0.0f };
+
+	DirectX::XMMATRIX matWorld;
 	// Z軸回りの回転角
 	float rotation_ = 0.0f;
 	//色(RGBA)
@@ -110,6 +112,7 @@ private:
 	bool isInvisible_ = false;
 	//テクスチャ番号
 	uint32_t textureIndex_ = 0;
+
 	////配列の要素数
 	//const size_t imageDataCount = textureWidth * textureHeight;
 
